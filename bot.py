@@ -1,32 +1,61 @@
-import nest_asyncio
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import logging
+from telegram import ForceReply, Update
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 
-# Дозволяємо вкладені цикли
-nest_asyncio.apply()
+# Увімкнення логування
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+# встановлення вищого рівня логування для httpx, щоб уникнути логування всіх GET і POST запитів
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
-# Функція обробки команди /start
+logger = logging.getLogger(__name__)
+
+# Визначення кількох обробників команд. Зазвичай вони приймають два аргументи: update і context.
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text('Привіт! Я підослідний кролик врятуйте мене будь ласка.')
+    """Надсилає повідомлення, коли виконується команда /start."""
+    user = update.effective_user
+    await update.message.reply_html(
+        rf"Привіт {user.mention_html()}! Я підослідний кролик врятуйте мене будь ласка.",
+        reply_markup=ForceReply(selective=True),
+    )
 
-# Функція обробки повідомлень (echo)
-async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Надсилає повідомлення, коли виконується команда /help."""
+    await update.message.reply_text("Допоможіть!")
+
+# Функція обробки текстових повідомлень (echo)
+async def echo_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(update.message.text)
 
-async def main():
-    # Введіть свій токен тут
-    application = ApplicationBuilder().token("7818534299:AAFcQcJN4xMaOKq6kSJSIQjAQDN7AMK8F2o").build()
+# Функція обробки GIF (echo)
+async def echo_gif(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_animation(update.message.animation.file_id)
 
-    # Реєстрація обробника команд
+# Функція обробки наліпок (echo)
+async def echo_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_sticker(update.message.sticker.file_id)
+
+def main() -> None:
+    """Запуск бота."""
+    # Створення додатку та передача токену вашого бота.
+    application = Application.builder().token("7818534299:AAFcQcJN4xMaOKq6kSJSIQjAQDN7AMK8F2o").build()
+
+    # на різні команди - відповідь у Telegram
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+
+    # Реєстрація обробника текстових повідомлень
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo_text))
     
-    # Реєстрація обробника повідомлень
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
+    # Реєстрація обробника GIF
+    application.add_handler(MessageHandler(filters.ANIMATION, echo_gif))
+    
+    # Реєстрація обробника наліпок
+    application.add_handler(MessageHandler(filters.Sticker.ALL, echo_sticker))
 
-    # Запуск бота
-    await application.run_polling()
+    # Запуск бота до тих пір, поки користувач не натисне Ctrl-C
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
-if __name__ == '__main__':
-    import asyncio
-
-    asyncio.run(main())
+if __name__ == "__main__":
+    main()
